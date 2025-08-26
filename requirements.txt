@@ -10,3 +10,4 @@ psycopg2==2.8.6
 pytz==2024.2
 requests==2.22.0
 schedule==0.5.0
+powershift-cli==1.2.0
