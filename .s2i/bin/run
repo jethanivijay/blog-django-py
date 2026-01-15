@@ -13,7 +13,7 @@ run_hook() {
 }
 
 # 3. Ensure we are in the correct directory
-cd /opt/app-root/.s2i
+cd ./s2i
 
 # --- PRE_RUN HOOK ---
 run_hook "pre_run"
