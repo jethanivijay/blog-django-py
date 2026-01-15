@@ -13,7 +13,7 @@ run_hook() {
 }
 
 # 3. Activate Python Environment (Crucial for UBI images)
-source /opt/app-root/etc/scl_enable || true
+# source /opt/app-root/etc/scl_enable || true
 
 # --- PRE_BUILD HOOK ---
 run_hook "pre_build"
