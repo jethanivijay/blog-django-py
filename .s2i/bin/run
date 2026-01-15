@@ -13,7 +13,7 @@ run_hook() {
 }
 
 # 3. ENSURE we are in the correct directory (The Fix)
-cd /opt/app-root/src
+# cd /opt/app-root/src
 
 # Debugging: Print where we are and what files exist (Helps if this fails again)
 echo "---> Current Directory: $(pwd)"
