@@ -12,13 +12,8 @@ run_hook() {
     fi
 }
 
-# 3. ENSURE we are in the correct directory (The Fix)
-# cd /opt/app-root/src
-
-# Debugging: Print where we are and what files exist (Helps if this fails again)
-echo "---> Current Directory: $(pwd)"
-echo "---> Files in current directory:"
-ls -F
+# 3. Ensure we are in the correct directory
+cd /opt/app-root/s2i
 
 # --- PRE_RUN HOOK ---
 run_hook "pre_run"
@@ -28,15 +23,13 @@ echo "---> Starting application..."
 
 # A: If Gunicorn is installed, use it
 if command -v gunicorn > /dev/null 2>&1; then
-    # Helper: Find the 'wsgi.py' file to determine the module name
+    # Auto-detect wsgi.py
     if [ -z "$APP_MODULE" ]; then
         if [ -f wsgi.py ]; then
             APP_MODULE="wsgi"
         else
-            # Search for a wsgi.py inside a subdirectory
             WSGI_FILE=$(find . -maxdepth 2 -type f -name 'wsgi.py' | head -n 1)
             if [ -n "$WSGI_FILE" ]; then
-                # Convert ./project/wsgi.py -> project.wsgi
                 APP_MODULE=$(echo "$WSGI_FILE" | cut -c 3- | sed 's|/|.|g' | sed 's|.py||')
             fi
         fi
@@ -50,8 +43,8 @@ if command -v gunicorn > /dev/null 2>&1; then
              --access-logfile - \
              --error-logfile -
     else
-        echo "ERROR: Gunicorn is installed but could not find a wsgi.py file."
-        echo "Check the 'ls' output above to see if your file structure is nested."
+        echo "ERROR: Gunicorn found, but no 'wsgi.py' detected."
+        echo "Files seen: $(ls -m)"
         exit 1
     fi
 
@@ -61,6 +54,7 @@ elif [ -f manage.py ]; then
     exec python manage.py runserver 0.0.0.0:8080
 else
     echo "ERROR: Could not find 'gunicorn' or 'manage.py'."
-    echo "Check the 'ls' output above. Is your code inside a subfolder?"
+    echo "CRITICAL: The directory /opt/app-root/src appears to be empty."
+    echo "Check if a Volume Mount is overwriting your code."
     exit 1
 fi
