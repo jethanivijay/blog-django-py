@@ -4,7 +4,7 @@ set -e
 # 1. Define location of hooks
 HOOKS_DIR=$(dirname "$0")/../action_hooks
 
-# 2. Function to run hooks (Replacing powershift)
+# 2. Function to run hooks
 run_hook() {
     if [ -x "$HOOKS_DIR/$1" ]; then
         echo "---> Running $1 hook..."
@@ -12,24 +12,28 @@ run_hook() {
     fi
 }
 
-# 3. Activate Python Environment
-source /opt/app-root/etc/scl_enable || true
+# 3. ENSURE we are in the correct directory (The Fix)
+cd /opt/app-root/src
+
+# Debugging: Print where we are and what files exist (Helps if this fails again)
+echo "---> Current Directory: $(pwd)"
+echo "---> Files in current directory:"
+ls -F
 
 # --- PRE_RUN HOOK ---
-# Useful for last-minute DB migrations or config checks
 run_hook "pre_run"
 
 # 4. Start the Application
 echo "---> Starting application..."
 
-# A: If Gunicorn is installed, use it (Production Standard)
+# A: If Gunicorn is installed, use it
 if command -v gunicorn > /dev/null 2>&1; then
     # Helper: Find the 'wsgi.py' file to determine the module name
     if [ -z "$APP_MODULE" ]; then
         if [ -f wsgi.py ]; then
             APP_MODULE="wsgi"
         else
-            # Search for a wsgi.py inside a subdirectory (Django standard layout)
+            # Search for a wsgi.py inside a subdirectory
             WSGI_FILE=$(find . -maxdepth 2 -type f -name 'wsgi.py' | head -n 1)
             if [ -n "$WSGI_FILE" ]; then
                 # Convert ./project/wsgi.py -> project.wsgi
@@ -47,14 +51,16 @@ if command -v gunicorn > /dev/null 2>&1; then
              --error-logfile -
     else
         echo "ERROR: Gunicorn is installed but could not find a wsgi.py file."
+        echo "Check the 'ls' output above to see if your file structure is nested."
         exit 1
     fi
 
-# B: Fallback to Django Development Server (Only if Gunicorn is missing)
+# B: Fallback to Django Development Server
 elif [ -f manage.py ]; then
     echo "WARNING: Gunicorn not found. Starting Django development server."
     exec python manage.py runserver 0.0.0.0:8080
 else
-    echo "ERROR: Could not find 'gunicorn' or 'manage.py'. Cannot start."
+    echo "ERROR: Could not find 'gunicorn' or 'manage.py'."
+    echo "Check the 'ls' output above. Is your code inside a subfolder?"
     exit 1
 fi
