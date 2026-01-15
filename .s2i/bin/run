@@ -1,15 +1,60 @@
 #!/bin/bash
+set -e
 
-set -eo pipefail
+# 1. Define location of hooks
+HOOKS_DIR=$(dirname "$0")/../action_hooks
 
-# If a wheelhouse cache directory exists, the repository was used as
-# input to a wheelhouse build, to build Python wheels for required packages.
-# In this case fall through to executing the original 'run' script.
+# 2. Function to run hooks (Replacing powershift)
+run_hook() {
+    if [ -x "$HOOKS_DIR/$1" ]; then
+        echo "---> Running $1 hook..."
+        "$HOOKS_DIR/$1"
+    fi
+}
 
-if [ -d /opt/app-root/wheelhouse ]; then
-    exec /opt/app-root/s2i/run
+# 3. Activate Python Environment
+source /opt/app-root/etc/scl_enable || true
+
+# --- PRE_RUN HOOK ---
+# Useful for last-minute DB migrations or config checks
+run_hook "pre_run"
+
+# 4. Start the Application
+echo "---> Starting application..."
+
+# A: If Gunicorn is installed, use it (Production Standard)
+if command -v gunicorn > /dev/null 2>&1; then
+    # Helper: Find the 'wsgi.py' file to determine the module name
+    if [ -z "$APP_MODULE" ]; then
+        if [ -f wsgi.py ]; then
+            APP_MODULE="wsgi"
+        else
+            # Search for a wsgi.py inside a subdirectory (Django standard layout)
+            WSGI_FILE=$(find . -maxdepth 2 -type f -name 'wsgi.py' | head -n 1)
+            if [ -n "$WSGI_FILE" ]; then
+                # Convert ./project/wsgi.py -> project.wsgi
+                APP_MODULE=$(echo "$WSGI_FILE" | cut -c 3- | sed 's|/|.|g' | sed 's|.py||')
+            fi
+        fi
+    fi
+
+    if [ -n "$APP_MODULE" ]; then
+        echo "---> Starting Gunicorn with module: $APP_MODULE"
+        exec gunicorn "$APP_MODULE:application" \
+             --bind 0.0.0.0:8080 \
+             --workers 3 \
+             --access-logfile - \
+             --error-logfile -
+    else
+        echo "ERROR: Gunicorn is installed but could not find a wsgi.py file."
+        exit 1
+    fi
+
+# B: Fallback to Django Development Server (Only if Gunicorn is missing)
+elif [ -f manage.py ]; then
+    echo "WARNING: Gunicorn not found. Starting Django development server."
+    exec python manage.py runserver 0.0.0.0:8080
+else
+    echo "ERROR: Could not find 'gunicorn' or 'manage.py'. Cannot start."
+    exit 1
 fi
-
-# Run the deployment phase with support for action hooks.
-
-exec powershift image run
