@@ -1,49 +1,28 @@
 #!/bin/bash
 set -e
 
-# 1. Define location of hooks (standard S2I location)
-HOOKS_DIR=$(dirname "$0")/../action_hooks
-
-# 2. Function to run hooks (replaces powershift functionality)
-run_hook() {
-    if [ -x "$HOOKS_DIR/$1" ]; then
-        echo "---> Running $1 hook..."
-        "$HOOKS_DIR/$1"
-    fi
-}
-
-# 3. Activate Python Environment (Crucial for UBI images)
-# source /opt/app-root/etc/scl_enable || true
-
-# --- PRE_BUILD HOOK ---
-run_hook "pre_build"
-
-echo "---> Installing dependencies..."
-pip install --upgrade pip setuptools wheel
-
-# Check for wheelhouse (offline builds) or requirements.txt
-if [ -d wheelhouse ]; then
-    pip install --no-index --find-links=wheelhouse -r requirements.txt
-elif [ -f requirements.txt ]; then
-    pip install -r requirements.txt
-fi
-
-echo "---> Running application setup..."
-
-# 4. Django Setup (Standard "powershift" replacements)
-if [ -f manage.py ]; then
-    if [ -z "$DISABLE_MIGRATE" ]; then
-        echo "---> Migrating database..."
-        python manage.py migrate --noinput
-    fi
-
-    if [ -z "$DISABLE_COLLECTSTATIC" ]; then
-        echo "---> Collecting static files..."
-        python manage.py collectstatic --noinput
+# 1. Restore the standard S2I build logic
+# If this is a wheelhouse build, use the upstream assemble
+if [ -d /opt/app-root/wheelhouse ]; then
+    if [ -f /usr/libexec/s2i/assemble ]; then
+        exec /usr/libexec/s2i/assemble
+    else
+        exec /opt/app-root/s2i/assemble
     fi
 fi
 
-# --- BUILD HOOK ---
-run_hook "build"
+# 2. (Optional) Run your "Action Hooks" manually
+# If you used powershift to run pre-build scripts, just run them here directly.
+# Example:
+# if [ -f ./.s2i/action_hooks/pre_build ]; then
+#     ./.s2i/action_hooks/pre_build
+# fi
 
-echo "---> Build completed successfully"
+# 3. Execute the Standard Assemble Script
+# This runs the actual build (pip install -r requirements.txt, etc.)
+echo "---> Running standard S2I assemble..."
+if [ -f /usr/libexec/s2i/assemble ]; then
+    exec /usr/libexec/s2i/assemble
+else
+    exec /opt/app-root/s2i/assemble
+fi
